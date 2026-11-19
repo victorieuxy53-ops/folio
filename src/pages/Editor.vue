@@ -113,8 +113,22 @@ async function publish() {
     return
   }
   if (row.value.paid) return deploy()
+  const transactionId = pendingTx()
+  if (transactionId) return deploy({ transactionId })
   if (promoOpen) checkout.value = true
   else await payNow()
+}
+
+// Paiement réussi mais publication interrompue (réseau, erreur serveur) : la transaction est gardée
+// sur cet appareil pour que « Publier » réessaie sans faire payer une deuxième fois.
+const txKey = `folio:tx:${props.id}`
+function pendingTx(value?: string) {
+  try {
+    if (value === undefined) return localStorage.getItem(txKey) ?? ''
+    if (value) localStorage.setItem(txKey, value)
+    else localStorage.removeItem(txKey)
+  } catch {}
+  return ''
 }
 
 async function payNow() {
@@ -122,7 +136,10 @@ async function payNow() {
   checkout.value = false
   try {
     const options = { amount: PRICE, name: data.value.content.name, email: session.value?.user.email ?? '', portfolioId: props.id }
-    await pay(options, (transactionId) => deploy({ transactionId }))
+    await pay(options, (transactionId) => {
+      pendingTx(transactionId)
+      deploy({ transactionId })
+    })
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   }
@@ -145,10 +162,15 @@ async function deploy(proof: { transactionId?: string; promo?: string } = {}) {
       body: JSON.stringify({ portfolioId: props.id, ...proof }),
     })
     const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string }
+    // Transaction acceptée (paiement enregistré) ou refusée pour de bon : inutile de la garder.
+    if (proof.transactionId && (res.ok || [400, 402, 409].includes(res.status))) pendingTx('')
     if (!res.ok || !body.url) throw new Error(body.error || 'La mise en ligne a échoué. Réessayez dans un instant.')
     publishedUrl.value = body.url
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    // TypeError : le réseau a coupé avant la réponse du serveur.
+    const message = e instanceof TypeError ? 'Connexion interrompue. Vérifiez votre réseau, puis réessayez.' : e instanceof Error ? e.message : String(e)
+    const kept = proof.transactionId && pendingTx() ? ' Votre paiement est bien conservé : cliquez de nouveau sur « Publier », vous ne paierez pas deux fois.' : ''
+    error.value = message + kept
   } finally {
     publishing.value = false
     const { data: r } = await supabase.from('portfolios').select('*').eq('id', props.id).maybeSingle()

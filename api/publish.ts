@@ -102,11 +102,14 @@ async function verifyPayment(transactionId: string, portfolioId: string): Promis
     },
     body: JSON.stringify({ transactionId }),
   })
+  // Clés absentes ou erronées, Kkiapay indisponible : erreur serveur (visible dans les logs Vercel), pas un refus de paiement.
+  if (!res.ok) throw new Error(`Kkiapay ${res.status} : ${await res.text().catch(() => '')}`)
   type Transaction = { status?: string; amount?: number; partnerId?: unknown }
-  const tx = res.ok ? ((await res.json().catch(() => ({}))) as Transaction) : undefined
-  const amount = Number(tx?.amount)
-  if (tx?.status !== 'SUCCESS' || !(amount >= PRICE)) throw new HttpError(402, 'Paiement non confirmé par Kkiapay.')
-  if (tx.partnerId !== portfolioId) throw new HttpError(409, 'Ce paiement a été fait pour un autre portfolio.')
+  const tx = (await res.json().catch(() => ({}))) as Transaction
+  const amount = Number(tx.amount)
+  if (tx.status !== 'SUCCESS' || !(amount >= PRICE)) throw new HttpError(402, 'Paiement non confirmé par Kkiapay.')
+  // Kkiapay peut renvoyer partnerId vide : on ne refuse que s'il désigne un autre portfolio.
+  if (tx.partnerId && tx.partnerId !== portfolioId) throw new HttpError(409, 'Ce paiement a été fait pour un autre portfolio.')
   return amount
 }
 

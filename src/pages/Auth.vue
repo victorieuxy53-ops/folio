@@ -30,6 +30,7 @@ const MESSAGES: Record<string, string> = {
   weak_password: 'Mot de passe trop faible : 8 caractères minimum.',
   same_password: 'Choisissez un mot de passe différent de l’ancien.',
   over_email_send_rate_limit: 'Trop de tentatives. Patientez quelques minutes.',
+  email_address_not_authorized: 'L’e-mail ne peut pas être envoyé pour le moment. Réessayez plus tard.',
 }
 
 function switchTo(m: Mode) {

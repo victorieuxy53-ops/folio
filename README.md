@@ -13,6 +13,7 @@ Les clients créent leur portfolio sans code. Ils choisissent un style (6 mises 
    - Site URL : l'adresse de votre SaaS (ex. `https://folio.vercel.app`).
    - Redirect URLs : ajoutez `https://folio.vercel.app/**` (et `http://localhost:5173/**` pour le local).
 4. Facultatif : **Authentication > Providers > Email**, mot de passe de 8 caractères minimum.
+5. **E-mails** : sans SMTP personnalisé, Supabase n'envoie ses e-mails qu'aux membres de votre équipe Supabase. Vos clients ne reçoivent rien, même dans les spams. Désactivez **Confirm email** (inscription immédiate), et configurez un SMTP dans **Authentication > Emails > SMTP Settings** (ex. Brevo, gratuit : `smtp-relay.brevo.com`, port `587`) pour « Mot de passe oublié ».
 
 ### 2. Kkiapay
 Créez un compte sur [kkiapay.me](https://kkiapay.me) et récupérez, dans **Développeurs > Clés API**, les clés publique, privée et secrète. Testez avec les clés de test et `VITE_KKIAPAY_SANDBOX=true` (numéro de test MTN Bénin qui réussit, d'après la doc Kkiapay : `22961000000`), puis mettez les clés réelles avec `VITE_KKIAPAY_SANDBOX=false` et redéployez.
