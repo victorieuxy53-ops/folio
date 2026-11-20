@@ -7,6 +7,7 @@ declare global {
     readonly VITE_SUPABASE_ANON_KEY: string
     readonly VITE_KKIAPAY_PUBLIC_KEY: string
     readonly VITE_KKIAPAY_SANDBOX?: string
+    readonly VITE_PROMO_FROM?: string
     readonly VITE_PROMO_UNTIL?: string
   }
   // Fonctions ajoutées par https://cdn.kkiapay.me/k.js

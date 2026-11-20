@@ -5,7 +5,7 @@ import {
   ArrowLeft, ArrowRight, Briefcase, CircleCheck, Copy, ExternalLink, Eye, FolderKanban, LoaderCircle,
   Monitor, Palette, Pencil, Rocket, Smartphone, Sparkles, TicketPercent, User, Wallet, X,
 } from '@lucide/vue'
-import { normalize, PRICE, promoEnd, type PortfolioData, type PortfolioRow } from '../../shared/portfolio'
+import { normalize, PRICE, promoPeriod, type PortfolioData, type PortfolioRow } from '../../shared/portfolio'
 import { renderPortfolio } from '../../shared/render'
 import { supabase } from '../lib/supabase'
 import { session } from '../lib/auth'
@@ -43,10 +43,8 @@ const publishing = ref(false)
 const error = ref('')
 const publishedUrl = ref('')
 const copied = ref(false)
-// Offre de lancement : tant qu'elle dure, la publication propose aussi un code promo.
-const promoUntil = promoEnd(import.meta.env.VITE_PROMO_UNTIL)
-const promoOpen = Date.now() <= promoUntil
-const promoDay = promoOpen ? new Date(promoUntil).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Africa/Lagos' }) : ''
+// Offre de lancement : pendant sa période, la publication propose aussi un code promo.
+const offer = promoPeriod(import.meta.env.VITE_PROMO_FROM, import.meta.env.VITE_PROMO_UNTIL)
 const checkout = ref(false)
 const promo = ref('')
 
@@ -115,7 +113,7 @@ async function publish() {
   if (row.value.paid) return deploy()
   const transactionId = pendingTx()
   if (transactionId) return deploy({ transactionId })
-  if (promoOpen) checkout.value = true
+  if (offer.open()) checkout.value = true
   else await payNow()
 }
 
@@ -296,7 +294,7 @@ const showSuccess = computed({ get: () => !!publishedUrl.value, set: (v) => !v &
       </button>
       <div class="my-5 flex items-center gap-3 text-xs text-zinc-400"><span class="h-px flex-1 bg-zinc-200" />ou<span class="h-px flex-1 bg-zinc-200" /></div>
       <form class="space-y-3" @submit.prevent="usePromo">
-        <Field label="Code promo" :hint="`Offre de lancement, valable jusqu’au ${promoDay}.`">
+        <Field label="Code promo" :hint="`Offre de lancement, valable ${offer.label}.`">
           <input v-model="promo" class="input uppercase" autocomplete="off" autocapitalize="characters" spellcheck="false" required />
         </Field>
         <button class="btn btn-outline w-full" :disabled="!promo.trim()"><TicketPercent class="size-4" /> Publier gratuitement</button>

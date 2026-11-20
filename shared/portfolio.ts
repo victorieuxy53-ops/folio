@@ -2,9 +2,28 @@
 
 export const BRAND = 'Folio'
 export const PRICE = 2000
-/** Fin de l'offre de lancement (code promo) : dernier jour inclus, AAAA-MM-JJ, heure du Bénin. NaN si pas d'offre. */
-export const promoEnd = (day = '') =>
-  /^\d{4}-\d{2}-\d{2}$/.test(day.trim()) ? Date.parse(`${day.trim()}T23:59:59.999+01:00`) : NaN
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
+const frenchDay = (iso: string) => {
+  const [year, month, day] = iso.split('-').map(Number) as [number, number, number]
+  return { year, month: MONTHS[month - 1], day: day === 1 ? '1er' : String(day) }
+}
+
+/**
+ * Offre de lancement (code promo) : du jour `from` à 00:00 au jour `until` à 23:59 inclus,
+ * dates AAAA-MM-JJ en heure du Bénin (UTC+1). Fermée si une date manque ou est invalide.
+ * `label` : « du 21 au 24 novembre 2026 ».
+ */
+export function promoPeriod(from = '', until = '') {
+  const [a, b] = [from.trim(), until.trim()]
+  const start = Date.parse(`${a}T00:00:00+01:00`)
+  const end = Date.parse(`${b}T23:59:59.999+01:00`)
+  if (!ISO_DAY.test(a) || !ISO_DAY.test(b) || !(start <= end)) return { open: () => false, label: '' }
+  const x = frenchDay(a)
+  const y = frenchDay(b)
+  const first = x.year !== y.year ? `${x.day} ${x.month} ${x.year}` : x.month !== y.month ? `${x.day} ${x.month}` : x.day
+  return { open: (now = Date.now()) => start <= now && now <= end, label: `du ${first} au ${y.day} ${y.month} ${y.year}` }
+}
 /** Préfixe des projets Vercel : folio-<adresse>.vercel.app */
 export const PROJECT_PREFIX = 'folio'
 

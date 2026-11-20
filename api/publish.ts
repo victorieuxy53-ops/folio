@@ -2,7 +2,7 @@
 // 1. vérifie l'utilisateur  2. vérifie le paiement Kkiapay ou le code promo (1re publication)
 // 3. génère le HTML  4. le déploie sur Vercel  5. enregistre l'URL.
 import { createClient } from '@supabase/supabase-js'
-import { normalize, PRICE, PROJECT_PREFIX, promoEnd, type PortfolioRow } from '../shared/portfolio.js'
+import { normalize, PRICE, PROJECT_PREFIX, promoPeriod, type PortfolioRow } from '../shared/portfolio.js'
 import { renderPortfolio } from '../shared/render.js'
 
 class HttpError extends Error {
@@ -81,11 +81,12 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-/** Code promo de lancement (PROMO_CODE, majuscules indifférentes), valable jusqu'au jour VITE_PROMO_UNTIL inclus. */
+/** Code promo de lancement (PROMO_CODE, majuscules indifférentes), valable du jour PROMO_FROM au jour PROMO_UNTIL inclus. */
 function checkPromo(code: string) {
   const expected = process.env.PROMO_CODE?.trim()
   if (!expected || code.toUpperCase() !== expected.toUpperCase()) throw new HttpError(400, 'Code promo invalide.')
-  if (!(Date.now() <= promoEnd(process.env.VITE_PROMO_UNTIL))) throw new HttpError(410, 'Ce code promo a expiré.')
+  const offer = promoPeriod(process.env.PROMO_FROM, process.env.PROMO_UNTIL)
+  if (!offer.open()) throw new HttpError(403, offer.label ? `Le code promo est valable ${offer.label}.` : 'Aucune offre promotionnelle en cours.')
 }
 
 /** Vérifie auprès de Kkiapay que la transaction est payée, pour ce portfolio, et renvoie le montant (FCFA). */
