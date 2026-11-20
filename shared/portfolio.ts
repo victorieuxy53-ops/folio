@@ -12,7 +12,7 @@ const frenchDay = (iso: string) => {
 /**
  * Offre de lancement (code promo) : du jour `from` à 00:00 au jour `until` à 23:59 inclus,
  * dates AAAA-MM-JJ en heure du Bénin (UTC+1). Fermée si une date manque ou est invalide.
- * `label` : « du 21 au 24 novembre 2026 ».
+ * `label`, par ex. « du 20 au 24 novembre 2026 » ou « du 28 novembre au 3 décembre 2026 ».
  */
 export function promoPeriod(from = '', until = '') {
   const [a, b] = [from.trim(), until.trim()]
