@@ -35,7 +35,15 @@ Inscrivez-vous sur votre site, puis exécutez dans Supabase :
 ```sql
 update public.profiles set role = 'admin' where email = 'votre@email.com';
 ```
-Le lien **Administration** apparaît alors dans la barre du haut.
+Le lien **Administration** apparaît alors dans la barre du haut (rechargez la page). Si `/admin` affiche « Accès réservé », la commande a été exécutée dans un autre projet Supabase que celui de `VITE_SUPABASE_URL` sur Vercel, ou avec un autre e-mail.
+
+L'administration montre les chiffres clés, les revenus, les visites, le parcours du visiteur au client, et tout le journal d'activité : inscriptions, portfolios créés, paiements, codes promo, mises en ligne, et chaque **échec de mise en ligne avec sa raison** (paiement refusé, erreur Kkiapay ou Vercel…).
+
+**Vérification en 2 étapes** : à la première visite de l'administration, scannez le QR code avec **Google Authenticator** (ou une application équivalente), puis entrez le code à 6 chiffres. Ce code est ensuite demandé à chaque connexion : sans lui, la base refuse l'accès aux données de la plateforme, même avec le bon mot de passe.
+Téléphone perdu : exécutez dans Supabase, puis scannez le nouveau QR code proposé :
+```sql
+delete from auth.mfa_factors where user_id = (select id from auth.users where email = 'votre@email.com');
+```
 
 ## Développement local
 ```bash

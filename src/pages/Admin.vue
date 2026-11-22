@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ExternalLink, FilePlus, LoaderCircle, RefreshCw, Rocket, Search, TicketPercent, UserPlus, Wallet } from '@lucide/vue'
+import { ExternalLink, FilePlus, LoaderCircle, RefreshCw, Rocket, Search, ShieldX, TicketPercent, TriangleAlert, UserPlus, Wallet } from '@lucide/vue'
 import type { PortfolioRow, Profile } from '../../shared/portfolio'
+import { isAdmin, session } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { dateTime, fcfa, host, num, shortDate } from '../lib/format'
 import AppBar from '../components/AppBar.vue'
 import BarChart from '../components/BarChart.vue'
+import MfaGate from '../components/MfaGate.vue'
 
 /** Chiffres d'une journée : visites de Folio, visites des sites clients, inscriptions, portfolios créés, paiements, revenus. */
 interface Day { day: string; visitors: number; site_visitors: number; signups: number; created: number; payments: number; revenue: number }
 interface Stats {
   users: number
   portfolios: number
+  /** Utilisateurs ayant créé au moins un portfolio (absent si schema.sql n'a pas été réexécuté). */
+  creators?: number
   published: number
   paying: number
   revenue: number
@@ -23,7 +27,7 @@ type PortfolioAdmin = PortfolioRow & { profiles: { email: string } | null }
 interface PaymentRow { id: string; transaction_id: string; amount: number; created_at: string; profiles: { email: string } | null; portfolios: { slug: string } | null }
 interface EventRow { id: number; type: string; meta: Record<string, unknown>; created_at: string; profiles: { email: string } | null }
 
-const tabs = ['Vue d’ensemble', 'Utilisateurs', 'Portfolios', 'Paiements'] as const
+const tabs = ['Vue d’ensemble', 'Activité', 'Utilisateurs', 'Portfolios', 'Paiements'] as const
 const tab = ref(0)
 const query = ref('')
 const loading = ref(true)
@@ -42,7 +46,7 @@ async function load() {
     supabase.from('profiles').select('*, portfolios(count)').order('created_at', { ascending: false }).limit(1000),
     supabase.from('portfolios').select('*, profiles(email)').order('updated_at', { ascending: false }).limit(1000),
     supabase.from('payments').select('*, profiles(email), portfolios(slug)').order('created_at', { ascending: false }).limit(1000),
-    supabase.from('events').select('*, profiles(email)').order('created_at', { ascending: false }).limit(40),
+    supabase.from('events').select('*, profiles(email)').order('created_at', { ascending: false }).limit(1000),
   ])
   const failed = [s, u, p, pay, ev].find((r) => r.error)
   if (failed?.error) error.value = `Chargement impossible : ${failed.error.message}`
@@ -53,22 +57,30 @@ async function load() {
   events.value = (ev.data ?? []) as EventRow[]
   loading.value = false
 }
-load()
+// Les données ne sont chargées qu'après la vérification en 2 étapes.
+const verified = ref(false)
+function onVerified() {
+  verified.value = true
+  load()
+}
 
 const dayLabel = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
 const daily = computed(() => stats.value?.daily ?? [])
 const sites = computed(() => stats.value?.sites ?? [])
-/** Total sur 30 jours (0 si la donnée manque, par exemple avant l'exécution de admin.sql). */
+/** Total sur 30 jours (0 si la donnée manque, par exemple avant l'exécution de schema.sql). */
 const total = (key: Exclude<keyof Day, 'day'>) => daily.value.reduce((sum, d) => sum + (Number(d[key]) || 0), 0)
 
 const tiles = computed(() => {
   const s = stats.value
   if (!s) return []
+  const creators = s.creators ?? users.value.filter((u) => (u.portfolios[0]?.count ?? 0) > 0).length
   return [
     { label: 'Revenus encaissés', value: fcfa(s.revenue), sub: `${fcfa(total('revenue'))} sur 30 jours, avant frais Kkiapay` },
-    { label: 'Visites de Folio', value: num(total('visitors')), sub: 'sur 30 jours' },
-    { label: 'Utilisateurs', value: num(s.users), sub: `+${num(total('signups'))} sur 30 jours` },
+    { label: 'Clients payants', value: num(s.paying), sub: `${conversion.value} % des inscrits` },
+    { label: 'Utilisateurs inscrits', value: num(s.users), sub: `+${num(total('signups'))} sur 30 jours` },
+    { label: 'Portfolios créés', value: num(s.portfolios), sub: `par ${num(creators)} utilisateur${creators > 1 ? 's' : ''}` },
     { label: 'Sites publiés', value: num(s.published), sub: `${num(total('site_visitors'))} visites sur 30 jours` },
+    { label: 'Visites de Folio', value: num(total('visitors')), sub: 'sur 30 jours' },
   ]
 })
 
@@ -95,10 +107,12 @@ const EVENT_TYPES: Record<string, { label: string; icon: typeof UserPlus; cls: s
   promo: { label: 'Code promo utilisé', icon: TicketPercent, cls: 'bg-violet-50 text-violet-700' },
   published: { label: 'Site publié', icon: Rocket, cls: 'bg-brand-50 text-brand-700' },
   updated: { label: 'Site mis à jour', icon: RefreshCw, cls: 'bg-amber-50 text-amber-700' },
+  failed: { label: 'Échec de mise en ligne', icon: TriangleAlert, cls: 'bg-red-50 text-red-700' },
 }
 const eventInfo = (type: string) => EVENT_TYPES[type] ?? { label: type, icon: FilePlus, cls: 'bg-zinc-100 text-zinc-700' }
+const metaText = (e: EventRow, key: string) => (typeof e.meta[key] === 'string' ? e.meta[key] : '')
 const eventDetail = (e: EventRow) =>
-  [typeof e.meta.slug === 'string' ? e.meta.slug : '', typeof e.meta.amount === 'number' ? fcfa(e.meta.amount) : ''].filter(Boolean).join(' · ')
+  [metaText(e, 'slug'), typeof e.meta.amount === 'number' ? fcfa(e.meta.amount) : ''].filter(Boolean).join(' · ')
 
 const match = (...values: (string | null | undefined)[]) => {
   const q = query.value.trim().toLowerCase()
@@ -107,12 +121,28 @@ const match = (...values: (string | null | undefined)[]) => {
 const filteredUsers = computed(() => users.value.filter((u) => match(u.email, u.full_name)))
 const filteredPortfolios = computed(() => portfolios.value.filter((p) => match(p.slug, p.url, p.profiles?.email)))
 const filteredPayments = computed(() => payments.value.filter((p) => match(p.transaction_id, p.profiles?.email, p.portfolios?.slug)))
+const filteredEvents = computed(() =>
+  events.value.filter((e) => match(eventInfo(e.type).label, e.profiles?.email, metaText(e, 'slug'), metaText(e, 'error'))),
+)
+/** Vue d'ensemble : les 10 dernières actions ; onglet Activité : tout le journal (1 000 dernières), filtrable. */
+const shownEvents = computed(() => (tab.value === 0 ? events.value.slice(0, 10) : filteredEvents.value))
 </script>
 
 <template>
   <div class="min-h-dvh">
     <AppBar />
-    <main class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <div v-if="!isAdmin" class="grid place-items-center px-4 py-16">
+      <div class="card w-full max-w-sm space-y-4 p-6 text-center sm:p-8">
+        <span class="mx-auto grid size-11 place-items-center rounded-xl bg-zinc-100 text-zinc-600"><ShieldX class="size-5" /></span>
+        <h1 class="text-xl font-bold">Accès réservé</h1>
+        <p class="text-sm text-zinc-500">
+          Le compte <strong class="break-all text-zinc-700">{{ session?.user.email }}</strong> n’est pas administrateur de Folio.
+        </p>
+        <RouterLink to="/app" class="btn btn-outline w-full">Retour à mes portfolios</RouterLink>
+      </div>
+    </div>
+    <MfaGate v-else-if="!verified" @ready="onVerified" />
+    <main v-else class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Administration</h1>
@@ -124,7 +154,7 @@ const filteredPayments = computed(() => payments.value.filter((p) => match(p.tra
       </div>
 
       <div class="mb-6 flex flex-wrap items-center gap-3">
-        <div class="flex gap-1 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-1">
+        <div class="flex flex-wrap gap-1 rounded-xl border border-zinc-200 bg-white p-1">
           <button
             v-for="(t, i) in tabs"
             :key="t"
@@ -145,72 +175,87 @@ const filteredPayments = computed(() => payments.value.filter((p) => match(p.tra
       <p v-if="error" class="alert mb-6">{{ error }}</p>
       <div v-if="loading && !stats" class="grid place-items-center py-24"><LoaderCircle class="size-8 animate-spin text-brand-600" /></div>
 
-      <!-- Vue d'ensemble -->
-      <div v-else-if="tab === 0" class="space-y-6">
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div v-for="t in tiles" :key="t.label" class="card p-5">
-            <p class="text-sm text-zinc-500">{{ t.label }}</p>
-            <p class="mt-2 text-2xl font-bold tracking-tight tabular-nums">{{ t.value }}</p>
-            <p class="mt-1 text-xs text-zinc-500">{{ t.sub }}</p>
+      <div v-else-if="tab <= 1" class="space-y-6">
+        <!-- Vue d’ensemble -->
+        <template v-if="tab === 0">
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div v-for="t in tiles" :key="t.label" class="card p-5">
+              <p class="text-sm text-zinc-500">{{ t.label }}</p>
+              <p class="mt-2 text-2xl font-bold tracking-tight tabular-nums">{{ t.value }}</p>
+              <p class="mt-1 text-xs text-zinc-500">{{ t.sub }}</p>
+            </div>
           </div>
-        </div>
-        <div class="grid gap-6 lg:grid-cols-2">
-          <BarChart title="Revenus par jour (FCFA) · 30 derniers jours" :data="daily.map((d) => ({ label: dayLabel(d.day), value: d.revenue }))" :format="num" />
-          <BarChart title="Visites de Folio par jour · 30 derniers jours" :data="daily.map((d) => ({ label: dayLabel(d.day), value: d.visitors ?? 0 }))" :format="num" />
-        </div>
-        <div class="grid gap-6 lg:grid-cols-2">
-          <section v-if="stats" class="card p-5">
-            <h2 class="mb-4 text-sm font-semibold text-zinc-700">Du visiteur au client · 30 derniers jours</h2>
-            <ol class="space-y-4">
-              <li v-for="s in funnel" :key="s.label">
-                <div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
-                  <span class="text-zinc-600">{{ s.label }}</span>
-                  <span>
-                    <span class="font-semibold tabular-nums">{{ num(s.value) }}</span>
-                    <span v-if="s.rate !== null" class="ml-2 text-xs text-zinc-500">{{ s.rate }} % de l’étape précédente</span>
-                  </span>
-                </div>
-                <div class="h-2 rounded-full bg-zinc-100"><div class="h-2 rounded-full bg-brand-600" :style="{ width: `${s.width}%` }" /></div>
-              </li>
-            </ol>
-            <p class="mt-5 border-t border-zinc-100 pt-4 text-sm text-zinc-600">
-              Depuis le lancement : <strong class="tabular-nums">{{ num(stats.paying) }}</strong> clients payants sur
-              {{ num(stats.users) }} inscrits ({{ conversion }} %).
-            </p>
-          </section>
-          <section class="card">
-            <h2 class="border-b border-zinc-100 px-5 py-4 text-sm font-semibold text-zinc-700">Sites clients les plus visités · 30 derniers jours</h2>
-            <p v-if="!sites.length" class="px-5 py-10 text-center text-sm text-zinc-500">Aucune visite pour le moment.</p>
-            <ol class="divide-y divide-zinc-100">
-              <li v-for="s in sites" :key="s.slug" class="flex items-center gap-3 px-5 py-3">
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-medium">{{ s.slug }}</p>
-                  <a v-if="s.url" :href="s.url" target="_blank" rel="noopener" class="inline-flex max-w-full items-center gap-1 text-xs text-brand-600 hover:underline">
-                    <span class="truncate">{{ host(s.url) }}</span> <ExternalLink class="size-3 shrink-0" />
-                  </a>
-                </div>
-                <span class="shrink-0 text-sm"><strong class="tabular-nums">{{ num(s.visitors) }}</strong> <span class="text-zinc-500">visites</span></span>
-              </li>
-            </ol>
-          </section>
-        </div>
+          <div class="grid gap-6 lg:grid-cols-2">
+            <BarChart title="Revenus par jour (FCFA) · 30 derniers jours" :data="daily.map((d) => ({ label: dayLabel(d.day), value: d.revenue }))" :format="num" />
+            <BarChart title="Visites de Folio par jour · 30 derniers jours" :data="daily.map((d) => ({ label: dayLabel(d.day), value: d.visitors ?? 0 }))" :format="num" />
+          </div>
+          <div class="grid gap-6 lg:grid-cols-2">
+            <section v-if="stats" class="card p-5">
+              <h2 class="mb-4 text-sm font-semibold text-zinc-700">Du visiteur au client · 30 derniers jours</h2>
+              <ol class="space-y-4">
+                <li v-for="s in funnel" :key="s.label">
+                  <div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+                    <span class="text-zinc-600">{{ s.label }}</span>
+                    <span>
+                      <span class="font-semibold tabular-nums">{{ num(s.value) }}</span>
+                      <span v-if="s.rate !== null" class="ml-2 text-xs text-zinc-500">{{ s.rate }} % de l’étape précédente</span>
+                    </span>
+                  </div>
+                  <div class="h-2 rounded-full bg-zinc-100"><div class="h-2 rounded-full bg-brand-600" :style="{ width: `${s.width}%` }" /></div>
+                </li>
+              </ol>
+              <p class="mt-5 border-t border-zinc-100 pt-4 text-sm text-zinc-600">
+                Depuis le lancement : <strong class="tabular-nums">{{ num(stats.paying) }}</strong> clients payants sur
+                {{ num(stats.users) }} inscrits ({{ conversion }} %).
+              </p>
+            </section>
+            <section class="card">
+              <h2 class="border-b border-zinc-100 px-5 py-4 text-sm font-semibold text-zinc-700">Sites clients les plus visités · 30 derniers jours</h2>
+              <p v-if="!sites.length" class="px-5 py-10 text-center text-sm text-zinc-500">Aucune visite pour le moment.</p>
+              <ol class="divide-y divide-zinc-100">
+                <li v-for="s in sites" :key="s.slug" class="flex items-center gap-3 px-5 py-3">
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-medium">{{ s.slug }}</p>
+                    <a v-if="s.url" :href="s.url" target="_blank" rel="noopener" class="inline-flex max-w-full items-center gap-1 text-xs text-brand-600 hover:underline">
+                      <span class="truncate">{{ host(s.url) }}</span> <ExternalLink class="size-3 shrink-0" />
+                    </a>
+                  </div>
+                  <span class="shrink-0 text-sm"><strong class="tabular-nums">{{ num(s.visitors) }}</strong> <span class="text-zinc-500">visites</span></span>
+                </li>
+              </ol>
+            </section>
+          </div>
+        </template>
+
+        <!-- Activité : les 10 dernières actions (vue d’ensemble) ou tout le journal (onglet Activité) -->
         <section class="card">
-          <h2 class="border-b border-zinc-100 px-5 py-4 text-sm font-semibold text-zinc-700">Activité récente</h2>
-          <p v-if="!events.length" class="px-5 py-10 text-center text-sm text-zinc-500">Aucune activité pour le moment.</p>
+          <div class="flex items-center justify-between gap-3 border-b border-zinc-100 px-5 py-3">
+            <h2 class="py-1 text-sm font-semibold text-zinc-700">{{ tab === 0 ? 'Activité récente' : 'Toute l’activité' }}</h2>
+            <span v-if="tab === 1" class="text-xs text-zinc-500 tabular-nums">
+              {{ num(filteredEvents.length) }} action{{ filteredEvents.length > 1 ? 's' : '' }}
+            </span>
+            <button v-else-if="events.length > shownEvents.length" type="button" class="btn btn-ghost !py-1 text-sm" @click="tab = 1">
+              Tout voir
+            </button>
+          </div>
+          <p v-if="!shownEvents.length" class="px-5 py-10 text-center text-sm text-zinc-500">
+            {{ events.length ? 'Aucun résultat.' : 'Aucune activité pour le moment.' }}
+          </p>
           <ul class="divide-y divide-zinc-100">
-            <li v-for="e in events" :key="e.id" class="flex items-center gap-3 px-5 py-3">
+            <li v-for="e in shownEvents" :key="e.id" class="flex items-start gap-3 px-5 py-3">
               <span class="grid size-9 shrink-0 place-items-center rounded-lg" :class="eventInfo(e.type).cls">
                 <component :is="eventInfo(e.type).icon" class="size-4" />
               </span>
               <div class="min-w-0 flex-1">
                 <p class="text-sm font-medium">{{ eventInfo(e.type).label }} <span v-if="eventDetail(e)" class="font-normal text-zinc-500">· {{ eventDetail(e) }}</span></p>
                 <p class="truncate text-xs text-zinc-500">{{ e.profiles?.email ?? 'Compte supprimé' }}</p>
+                <p v-if="metaText(e, 'error')" class="mt-1 text-xs break-words text-red-700">{{ metaText(e, 'error') }}</p>
               </div>
-              <time class="shrink-0 text-xs text-zinc-500" :datetime="e.created_at">{{ dateTime(e.created_at) }}</time>
+              <time class="shrink-0 pt-0.5 text-xs text-zinc-500" :datetime="e.created_at">{{ dateTime(e.created_at) }}</time>
             </li>
           </ul>
         </section>
-        <p class="text-xs text-zinc-500">
+        <p v-if="tab === 0" class="text-xs text-zinc-500">
           Une visite = un navigateur, une fois par jour et par site, sans cookie ni donnée personnelle. Vos propres visites (administrateur
           connecté) ne sont pas comptées. Les sites clients sont comptés à partir de leur prochaine publication.
         </p>
@@ -220,12 +265,12 @@ const filteredPayments = computed(() => payments.value.filter((p) => match(p.tra
       <div v-else class="card overflow-x-auto">
         <table class="w-full min-w-[640px] text-left text-sm">
           <thead class="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase">
-            <tr v-if="tab === 1"><th class="px-4 py-3">Utilisateur</th><th class="px-4 py-3">Rôle</th><th class="px-4 py-3">Portfolios</th><th class="px-4 py-3">Inscrit le</th></tr>
-            <tr v-else-if="tab === 2"><th class="px-4 py-3">Adresse</th><th class="px-4 py-3">Propriétaire</th><th class="px-4 py-3">Modèle</th><th class="px-4 py-3">Statut</th><th class="px-4 py-3">Modifié le</th></tr>
+            <tr v-if="tab === 2"><th class="px-4 py-3">Utilisateur</th><th class="px-4 py-3">Rôle</th><th class="px-4 py-3">Portfolios</th><th class="px-4 py-3">Inscrit le</th></tr>
+            <tr v-else-if="tab === 3"><th class="px-4 py-3">Adresse</th><th class="px-4 py-3">Propriétaire</th><th class="px-4 py-3">Modèle</th><th class="px-4 py-3">Statut</th><th class="px-4 py-3">Modifié le</th></tr>
             <tr v-else><th class="px-4 py-3">Transaction</th><th class="px-4 py-3">Client</th><th class="px-4 py-3">Portfolio</th><th class="px-4 py-3 text-right">Montant</th><th class="px-4 py-3">Date</th></tr>
           </thead>
           <tbody class="divide-y divide-zinc-100">
-            <template v-if="tab === 1">
+            <template v-if="tab === 2">
               <tr v-for="u in filteredUsers" :key="u.id">
                 <td class="px-4 py-3"><p class="font-medium">{{ u.full_name || '—' }}</p><p class="text-zinc-500">{{ u.email }}</p></td>
                 <td class="px-4 py-3"><span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="u.role === 'admin' ? 'bg-brand-50 text-brand-700' : 'bg-zinc-100 text-zinc-600'">{{ u.role === 'admin' ? 'Admin' : 'Client' }}</span></td>
@@ -233,7 +278,7 @@ const filteredPayments = computed(() => payments.value.filter((p) => match(p.tra
                 <td class="px-4 py-3 text-zinc-500">{{ shortDate(u.created_at) }}</td>
               </tr>
             </template>
-            <template v-else-if="tab === 2">
+            <template v-else-if="tab === 3">
               <tr v-for="p in filteredPortfolios" :key="p.id">
                 <td class="px-4 py-3">
                   <p class="font-medium">{{ p.slug }}</p>
@@ -261,7 +306,7 @@ const filteredPayments = computed(() => payments.value.filter((p) => match(p.tra
           </tbody>
         </table>
         <p
-          v-if="(tab === 1 && !filteredUsers.length) || (tab === 2 && !filteredPortfolios.length) || (tab === 3 && !filteredPayments.length)"
+          v-if="(tab === 2 && !filteredUsers.length) || (tab === 3 && !filteredPortfolios.length) || (tab === 4 && !filteredPayments.length)"
           class="px-4 py-12 text-center text-sm text-zinc-500"
         >
           Aucun résultat.

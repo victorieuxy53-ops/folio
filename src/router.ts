@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { authReady, ensureProfile, isAdmin, session } from './lib/auth'
+import { authReady, ensureProfile, session } from './lib/auth'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -17,10 +17,8 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   await authReady
   if (!session.value && (to.meta.auth || to.meta.admin)) return { path: '/auth', query: { next: to.fullPath } }
-  if (to.meta.admin) {
-    await ensureProfile()
-    if (!isAdmin.value) return '/app'
-  }
+  // La page d'administration indique elle-même à un compte non administrateur qu'il n'y a pas accès.
+  if (to.meta.admin) await ensureProfile()
   // Exception : /auth?mode=update sert à choisir un nouveau mot de passe une fois connecté.
   if (to.meta.guest && session.value && to.query.mode !== 'update') return '/app'
 })

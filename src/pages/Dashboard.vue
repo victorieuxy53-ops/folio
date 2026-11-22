@@ -48,7 +48,12 @@ async function create() {
   const { data, error: e } = await supabase.from('portfolios').insert({ slug: s, ...randomStyle(), content }).select('id').single()
   busy.value = false
   if (e || !data) {
-    error.value = e?.code === '23505' ? 'Cette adresse est déjà prise. Essayez une variante.' : 'Création impossible, réessayez.'
+    error.value =
+      e?.code === '23505'
+        ? 'Cette adresse est déjà prise. Essayez une variante.'
+        : e?.code === '42501'
+          ? 'Vous avez déjà 10 brouillons. Publiez-en ou supprimez-en un pour en créer un nouveau.'
+          : 'Création impossible, réessayez.'
     return
   }
   router.push(`/app/${data.id}`)

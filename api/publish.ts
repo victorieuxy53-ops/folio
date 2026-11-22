@@ -20,6 +20,8 @@ function env(name: string) {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // Défini une fois le portfolio trouvé : tout échec est alors inscrit dans le journal de l'administration.
+  let logFailure: ((error: string) => PromiseLike<unknown>) | undefined
   try {
     const db = createClient(env('VITE_SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -34,6 +36,8 @@ export async function POST(request: Request): Promise<Response> {
     const { data } = await db.from('portfolios').select('*').eq('id', String(body.portfolioId)).eq('user_id', userId).maybeSingle()
     const portfolio = data as PortfolioRow | null
     if (!portfolio) throw new HttpError(404, 'Portfolio introuvable.')
+    logFailure = (error) =>
+      db.from('events').insert({ user_id: userId, type: 'failed', meta: { slug: portfolio.slug, error: error.slice(0, 300) } })
 
     if (!portfolio.paid) {
       const promo = typeof body.promo === 'string' ? body.promo.trim() : ''
@@ -75,6 +79,7 @@ export async function POST(request: Request): Promise<Response> {
 
     return Response.json({ url })
   } catch (e) {
+    await logFailure?.(e instanceof Error ? e.message : String(e))
     if (e instanceof HttpError) return Response.json({ error: e.message }, { status: e.status })
     console.error(e)
     return Response.json({ error: 'La mise en ligne a échoué. Réessayez dans un instant.' }, { status: 500 })

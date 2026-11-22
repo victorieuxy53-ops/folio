@@ -158,7 +158,7 @@ export function normalize(raw: { slug?: unknown; template?: unknown; theme?: unk
       bg: hex(t.bg, p.bg),
       text: hex(t.text, p.text),
       accent: hex(t.accent, p.accent),
-      font: typeof t.font === 'string' && t.font in FONTS ? (t.font as FontId) : 'moderne',
+      font: typeof t.font === 'string' && Object.hasOwn(FONTS, t.font) ? (t.font as FontId) : 'moderne',
     },
     content: {
       name: str(c.name),
