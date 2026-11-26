@@ -22,7 +22,8 @@ interface Ctx {
   pj: Project[]
   st: Content['stats']
   sv: Content['services']
-  tm: Content['testimonials']
+  /** Captures d'écran d'avis clients. */
+  rw: string[]
 }
 interface Layout { css: string; body: string }
 
@@ -133,8 +134,9 @@ const projectCards = (x: Ctx, cls = '') =>
   }).join('')
 const projects = (x: Ctx, grid = 'pjg') => `${filters(x)}<div class="${grid}">${projectCards(x)}</div>`
 
-const testimonials = (x: Ctx) =>
-  `<div class="tms">${x.tm.map((t, i) => `<figure class="tm rv" style="--d:${i}"><blockquote>${inline(t.quote)}</blockquote><figcaption><span class="tm-av" aria-hidden="true">${esc(initials(t.name) || '★')}</span><span><b>${esc(t.name)}</b>${t.role.trim() ? `<small>${esc(t.role)}</small>` : ''}</span></figcaption></figure>`).join('')}</div>`
+/** Avis clients : captures d'écran en mosaïque, agrandies au clic. */
+const reviews = (x: Ctx) =>
+  `<div class="rws rv">${x.rw.map((u, i) => `<a class="rw zoom" href="${esc(u)}" aria-label="Agrandir l’avis client ${i + 1}"><img src="${esc(u)}" alt="Avis client ${i + 1}" loading="lazy"></a>`).join('')}</div>`
 
 const coords = (x: Ctx) => {
   const row = (icon: keyof typeof ICONS, label: string, value: string, url = '') =>
@@ -258,13 +260,10 @@ a.cover::after{content:"+";position:absolute;right:1rem;bottom:1rem;display:grid
 .pb h3{font-size:1.25rem}
 .more{display:inline-flex;align-items:center;gap:.4rem;margin-top:auto;padding-top:.6rem;font-weight:600;color:var(--ac);text-decoration:none}
 .more .ic{transition:translate .25s}.more:hover .ic{translate:3px -3px}
-.tms{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:1.25rem}
-.tm{display:flex;flex-direction:column;gap:1.5rem;padding:2rem;border-radius:var(--rc,22px);border:1px solid var(--ln);background:var(--card)}
-.tm blockquote{font-size:1.1rem;line-height:1.6}
-.tm blockquote::before{content:"“";display:block;height:1.7rem;font-family:Georgia,serif;font-size:4rem;line-height:1;color:var(--ac)}
-.tm figcaption{display:flex;align-items:center;gap:.85rem;margin-top:auto}
-.tm-av{display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;border-radius:50%;background:var(--ac);color:var(--on);font-size:.9rem;font-weight:700}
-.tm b{display:block}.tm small{display:block;font-size:.875rem;color:var(--mu)}
+.rws{columns:4 150px;column-gap:1rem}
+.rw{display:block;break-inside:avoid;margin-bottom:1rem;overflow:hidden;border-radius:var(--rc,18px);border:1px solid var(--ln);background:var(--card);cursor:zoom-in;transition:translate .3s var(--ease),box-shadow .3s}
+.rw:hover{translate:0 -4px;box-shadow:0 18px 40px -18px rgb(0 0 0/.4)}
+.rw img{width:100%;height:auto}
 .ct-g{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:clamp(2rem,5vw,4.5rem);align-items:start}
 .co{display:grid;gap:1.1rem;margin:2rem 0}
 .co li{display:flex;align-items:center;gap:1rem}
@@ -452,7 +451,7 @@ $$('form.cf').forEach(f => f.addEventListener('submit', e => {
 }))
 
 d.addEventListener('pointermove', e => {
-  const g = e.target.closest && e.target.closest('.pc,.sv,.tm,.cd')
+  const g = e.target.closest && e.target.closest('.pc,.sv,.cd')
   if (!g) return
   const r = g.getBoundingClientRect()
   g.style.setProperty('--mx', e.clientX - r.left + 'px')
@@ -545,13 +544,13 @@ const LAYOUTS: Record<TemplateId, (x: Ctx) => Layout> = {
 .tl{gap:1rem;padding:0;border:0}
 .tl li{padding:1.5rem 1.75rem;border:1px solid var(--ln);border-left:3px solid var(--ac);border-radius:18px;background:var(--bg)}
 .tl li::before{display:none}
-.sec:nth-of-type(even) .tl li,.sec:nth-of-type(even) .sv,.sec:nth-of-type(even) .pc,.sec:nth-of-type(even) .tm{background:var(--card)}
-.sec:nth-of-type(odd) .sv,.sec:nth-of-type(odd) .pc,.sec:nth-of-type(odd) .tm,.sec:nth-of-type(odd) .cf{background:var(--bg)}
+.sec:nth-of-type(even) .tl li,.sec:nth-of-type(even) .sv,.sec:nth-of-type(even) .pc{background:var(--card)}
+.sec:nth-of-type(odd) .sv,.sec:nth-of-type(odd) .pc,.sec:nth-of-type(odd) .cf{background:var(--bg)}
 .sv-n{border-radius:50%;background:var(--ac);color:var(--on)}
 .flt{justify-content:center}
 .ct-g .sh{text-align:left}.ct-g .sh h2::after{margin-left:0}
 .ct-g .lead{color:var(--mu);font-size:1.1rem}
-${glow('.sv,.pc,.tm')}
+${glow('.sv,.pc')}
 @media(max-width:900px){.hero{padding-top:6.5rem}.hero-g{grid-template-columns:1fr;text-align:center}.hero-p{order:-1}.ring{width:min(210px,54vw)}.intro{margin-inline:auto}.hero .ctas{justify-content:center}.ab{grid-template-columns:1fr}.c1{left:-22%}.c2{right:-22%}}
 @media(max-width:700px){.stb .stats{grid-template-columns:1fr 1fr;gap:1.5rem 0}.stb .stat:nth-child(odd){border-left:0}.cue{display:none}}
 @media(max-width:520px){.chip{display:none}}`,
@@ -566,7 +565,7 @@ ${x.bio || x.sk.length ? section('a-propos', 'sec', `<div class="wrap">${head('�
 ${x.sv.length ? section('services', 'sec', `<div class="wrap">${head('Mes services', 'Ce que je propose')}${services(x)}</div>`) : ''}
 ${x.xp.length || x.edu.length ? section('parcours', 'sec', `<div class="wrap">${head('Mon parcours', 'Expérience & formation')}${career(x)}</div>`) : ''}
 ${x.pj.length ? section('projets', 'sec', `<div class="wrap">${head('Mes réalisations', 'Projets')}${projects(x)}</div>`) : ''}
-${x.tm.length ? section('avis', 'sec', `<div class="wrap">${head('Ils me font confiance', 'Témoignages')}${testimonials(x)}</div>`) : ''}
+${x.rw.length ? section('avis', 'sec', `<div class="wrap">${head('Ils me font confiance', 'Avis clients')}${reviews(x)}</div>`) : ''}
 ${reach(x) ? section('contact', 'sec', `<div class="wrap ct-g"><div>${head('Travaillons ensemble', 'Contact')}<p class="lead rv">Un projet, une mission, une question ? Écrivez-moi, je vous réponds rapidement.</p>${coords(x)}${socials(x)}</div>${form(x)}</div>`) : ''}
 </main>`,
     }
@@ -619,9 +618,6 @@ ${reach(x) ? section('contact', 'sec', `<div class="wrap ct-g"><div>${head('Trav
 .cover{aspect-ratio:4/3;border-radius:16px}
 .pb{padding:1.25rem 0 0}
 .pb h3{font-size:1.45rem}
-.tms{grid-template-columns:1fr;gap:3rem}
-.tm{padding:0;border:0;border-radius:0;background:none}
-.tm blockquote{font-family:var(--hf);font-size:clamp(1.3rem,2.6vw,1.9rem);line-height:1.35;letter-spacing:-.01em}
 .ct{padding:clamp(5rem,10vw,8rem) 0}
 .ct .eb{display:block;margin-bottom:1rem}
 .ct h2{font-size:clamp(2.6rem,8vw,6.4rem);line-height:.98;letter-spacing:-.045em}
@@ -642,7 +638,7 @@ ${x.bio || x.sk.length ? section('a-propos', 'sec', `<div class="wrap ed">${labe
 ${x.sv.length ? section('services', 'sec', `<div class="wrap ed">${label('Services')}${services(x)}</div>`) : ''}
 ${x.xp.length || x.edu.length ? section('parcours', 'sec', `<div class="wrap ed">${label('Parcours')}${career(x)}</div>`) : ''}
 ${x.pj.length ? section('projets', 'sec', `<div class="wrap ed">${label('Projets')}<div>${projects(x)}</div></div>`) : ''}
-${x.tm.length ? section('avis', 'sec', `<div class="wrap ed">${label('Témoignages')}${testimonials(x)}</div>`) : ''}
+${x.rw.length ? section('avis', 'sec', `<div class="wrap ed">${label('Avis clients')}${reviews(x)}</div>`) : ''}
 ${reach(x) ? section('contact', 'ct', `<div class="wrap"><p class="eb rv">${pad(++k)} — Contact</p><h2 class="rv">Parlons de<br>votre projet.</h2>${x.email ? `<a class="mail rv" href="mailto:${esc(x.email)}">${esc(x.email)} ${ic('arrow')}</a>` : ''}<div class="ct-g"><div>${coords(x)}${socials(x)}</div>${form(x)}</div></div>`) : ''}
 </main>`,
     }
@@ -695,7 +691,7 @@ ${socials(x)}
 ${x.sv.length ? section('services', 'blk', head('Services') + services(x)) : ''}
 ${x.xp.length || x.edu.length ? section('parcours', 'blk', head('Parcours') + career(x)) : ''}
 ${x.pj.length ? section('projets', 'blk', head('Projets') + projects(x)) : ''}
-${x.tm.length ? section('avis', 'blk', head('Recommandations') + testimonials(x)) : ''}
+${x.rw.length ? section('avis', 'blk', head('Avis clients') + reviews(x)) : ''}
 ${reach(x) ? section('contact', 'blk', `${head('Contact')}<div class="ct-card ct-g"><div>${coords(x)}<p class="mu">Disponible pour échanger sur vos projets. Réponse sous 24 h.</p></div>${form(x)}</div>`) : ''}
 </main></div>`,
   }),
@@ -757,16 +753,12 @@ ${reach(x) ? section('contact', 'blk', `${head('Contact')}<div class="ct-card ct
 .tl .org{grid-row:1;grid-column:2}
 .tl .pd{grid-row:1;grid-column:3}
 .tl .mu{grid-column:1/-1}
-.tms{grid-template-columns:1fr;gap:0}
-.tm{display:grid;grid-template-columns:minmax(0,1fr) 16rem;gap:2rem;padding:2.5rem 0;border:0;border-top:1px solid var(--ln);border-radius:0;background:none}
-.tm blockquote{font-family:var(--hf);font-size:clamp(1.4rem,3vw,2.2rem);font-weight:600;line-height:1.25;letter-spacing:-.02em}
-.tm figcaption{align-self:end}
 .cta h2{font-size:clamp(3rem,11vw,9rem);line-height:.9;letter-spacing:-.055em}
 .cta h2 span{color:var(--ac)}
 .mail{display:inline-flex;align-items:center;gap:.6rem;margin-top:2.5rem;font-family:var(--hf);font-size:clamp(1.3rem,3.4vw,2.4rem);font-weight:600;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:10px}
 .mail:hover{color:var(--ac)}
 .cta .ct-g{margin-top:4rem}
-@media(max-width:800px){.sv{grid-template-columns:3rem minmax(0,1fr)}.sv>.mu{grid-column:2}.pjl .pc{grid-template-columns:1fr;gap:1.25rem}.pjl .pc::before{display:none}.pjl .cover{order:0}.tl li{grid-template-columns:1fr}.tl h4,.tl .org,.tl .pd{grid-row:auto;grid-column:1}.tm{grid-template-columns:1fr}}`,
+@media(max-width:800px){.sv{grid-template-columns:3rem minmax(0,1fr)}.sv>.mu{grid-column:2}.pjl .pc{grid-template-columns:1fr;gap:1.25rem}.pjl .pc::before{display:none}.pjl .cover{order:0}.tl li{grid-template-columns:1fr}.tl h4,.tl .org,.tl .pd{grid-row:auto;grid-column:1}}`,
     body: `${header(x, `${esc(x.name)}<b>*</b>`)}
 <main>
 <section class="hero"><span class="blob b1"></span><span class="blob b2"></span><div class="wrap">
@@ -780,7 +772,7 @@ ${x.bio || x.sk.length ? section('a-propos', 'sec', `<div class="wrap">${head('�
 ${x.sv.length ? section('services', 'sec', `<div class="wrap">${head('Services', `(${pad(x.sv.length)})`)}${services(x)}</div>`) : ''}
 ${x.pj.length ? section('projets', 'sec', `<div class="wrap">${head('Projets', `(${pad(x.pj.length)})`)}${projects(x, 'pjl')}</div>`) : ''}
 ${x.xp.length || x.edu.length ? section('parcours', 'sec', `<div class="wrap">${head('Parcours')}${career(x)}</div>`) : ''}
-${x.tm.length ? section('avis', 'sec', `<div class="wrap">${head('Ils en parlent')}${testimonials(x)}</div>`) : ''}
+${x.rw.length ? section('avis', 'sec', `<div class="wrap">${head('Ils en parlent')}${reviews(x)}</div>`) : ''}
 ${reach(x) ? section('contact', 'sec cta', `<div class="wrap"><h2 class="rv">Travaillons<br><span>ensemble.</span></h2>${x.email ? `<a class="mail rv" href="mailto:${esc(x.email)}">${esc(x.email)} ${ic('arrow')}</a>` : ''}<div class="ct-g"><div>${coords(x)}${socials(x)}</div>${form(x)}</div></div>`) : ''}
 </main>`,
   }),
@@ -814,9 +806,8 @@ ${reach(x) ? section('contact', 'sec cta', `<div class="wrap"><h2 class="rv">Tra
 .cd .svc{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:1rem}
 .cd .sv{background:var(--bg)}
 .cd .tl li::before{background:var(--card)}
-.bt .pjg,.bt .tms{display:contents}
+.bt .pjg{display:contents}
 .bt .pc{grid-column:span 2;border-radius:28px}
-.bt .tm{grid-column:span 2;border-radius:28px}
 .bt .flt{margin:0}
 .cta{display:flex;flex-direction:column;border:0;background:var(--ac);color:var(--on)}
 .cta h2{font-size:clamp(1.8rem,3.6vw,2.6rem)}
@@ -828,9 +819,9 @@ ${reach(x) ? section('contact', 'sec cta', `<div class="wrap"><h2 class="rv">Tra
 .cta .so a:hover{border-color:currentColor;color:inherit}
 .bt .cf{height:100%;border-radius:28px}
 .ft{width:min(100% - 2rem,1200px);margin:0 auto;padding-inline:.5rem;border:0}
-${glow('.cd,.bt .pc,.bt .tm')}
+${glow('.cd,.bt .pc')}
 @media(max-width:1000px){.bt{grid-template-columns:repeat(2,minmax(0,1fr))}.s3,.s4{grid-column:1/-1}}
-@media(max-width:620px){.s2,.s3,.photo,.bt .pc,.bt .tm,.ctw{grid-column:1/-1}.hero{min-height:0}.photo .av{min-height:260px}}`,
+@media(max-width:620px){.s2,.s3,.photo,.bt .pc,.ctw{grid-column:1/-1}.hero{min-height:0}.photo .av{min-height:260px}}`,
     body: `${header(x, esc(x.name))}
 <main class="bt">
 <section class="cd s3 r2 hero rv">${avail(x)}<p class="hi">Bonjour, je suis</p><h1>${esc(x.name)}</h1>${tagline(x) ? `<p class="role">${tagline(x)}</p>` : ''}${intro(x, 0)}${ctas(x, 0)}</section>
@@ -842,7 +833,7 @@ ${x.sv.length ? section('services', 'cd s4 rv', `<p class="lab">Ce que je propos
 ${x.xp.length ? `<section id="parcours" class="cd ${x.edu.length ? 's2' : 's4'} rv"><p class="lab">Expérience</p>${timeline(x.xp)}</section>` : ''}
 ${x.edu.length ? `<section${x.xp.length ? '' : ' id="parcours"'} class="cd ${x.xp.length ? 's2' : 's4'} rv" style="--d:1"><p class="lab">Formation</p>${timeline(x.edu)}</section>` : ''}
 ${x.pj.length ? `<div id="projets" class="cd s4 rv"><p class="lab" style="margin:0">Projets · ${pad(x.pj.length)}</p>${filters(x) ? `<div style="margin-top:1.25rem">${filters(x)}</div>` : ''}</div><div class="pjg">${projectCards(x)}</div>` : ''}
-${x.tm.length ? testimonials(x) : ''}
+${x.rw.length ? section('avis', 'cd s4 rv', `<p class="lab">Avis clients</p>${reviews(x)}`) : ''}
 ${reach(x) ? `<section id="contact" class="cd s2 cta rv"><p class="lab" style="color:inherit;opacity:.8">Contact</p><h2>Un projet en tête ?<br>Parlons-en.</h2>${coords(x)}${socials(x)}</section><div class="s2 ctw">${form(x)}</div>` : ''}
 </main>`,
   }),
@@ -925,7 +916,7 @@ ${x.bio || x.sk.length ? section('a-propos', 'sec', `<div class="wrap">${label('
 ${x.sv.length ? section('services', 'sec', `<div class="wrap">${label('Services')}${services(x)}</div>`) : ''}
 ${x.xp.length || x.edu.length ? section('parcours', 'sec', `<div class="wrap">${label('Parcours')}${career(x)}</div>`) : ''}
 ${x.pj.length ? section('projets', 'sec', `<div class="wrap">${label('Projets')}${projects(x)}</div>`) : ''}
-${x.tm.length ? section('avis', 'sec', `<div class="wrap">${label('Recommandations')}${testimonials(x)}</div>`) : ''}
+${x.rw.length ? section('avis', 'sec', `<div class="wrap">${label('Avis clients')}${reviews(x)}</div>`) : ''}
 ${reach(x) ? section('contact', 'sec ct', `<div class="wrap">${head('Me contacter', `${pad(++k)}. Et maintenant ?`)}<p class="lead rv">Une opportunité, un projet ou simplement envie d’échanger ? Ma boîte de réception est ouverte.</p><div class="ct-g"><div>${coords(x)}${socials(x)}</div>${form(x)}</div></div>`) : ''}
 </main>`,
     }
@@ -973,7 +964,7 @@ export function renderPortfolio(p: PortfolioData, opts: { appUrl?: string; track
     pj: c.projects.filter((pr) => filled(pr.title, pr.text) || secure(pr.image)),
     st: c.stats.filter((s) => filled(s.value)),
     sv: c.services.filter((s) => filled(s.title, s.text)),
-    tm: c.testimonials.filter((s) => filled(s.quote)),
+    rw: c.reviews.map((u) => secure(u)).filter(Boolean),
   }
   x.nav = [
     ...(x.bio || x.sk.length ? [{ label: 'À propos', url: 'a-propos' }] : []),
@@ -1030,7 +1021,7 @@ ${x.photo ? `<meta property="og:image" content="${esc(x.photo)}">\n` : ''}<meta 
 ${layout.body}
 <footer class="ft"><p>© <span data-y>${new Date().getFullYear()}</span> ${esc(name)}</p><p>Portfolio créé avec ${credit}</p></footer>
 <a class="top" href="#top" aria-label="Revenir en haut">${ic('up')}</a>
-${x.pj.some((pr) => secure(pr.image)) ? '<div class="lb" role="dialog" aria-modal="true" aria-label="Image agrandie"><img alt=""><button type="button" aria-label="Fermer">✕</button></div>\n' : ''}<script>${RUNTIME}</script>
+${x.rw.length || x.pj.some((pr) => secure(pr.image)) ? '<div class="lb" role="dialog" aria-modal="true" aria-label="Image agrandie"><img alt=""><button type="button" aria-label="Fermer">✕</button></div>\n' : ''}<script>${RUNTIME}</script>
 ${opts.track ? tracker(opts.track, p.slug) : ''}</body>
 </html>`
 }

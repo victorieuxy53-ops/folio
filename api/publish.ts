@@ -64,7 +64,7 @@ export async function POST(request: Request): Promise<Response> {
         // Déjà enregistré : nouvel essai pour ce portfolio après une interruption (accepté),
         // ou code promo déjà utilisé par ce compte pour un autre portfolio (refusé).
         const { data: prev } = await db.from('payments').select('portfolio_id').eq('transaction_id', transactionId).maybeSingle()
-        if (prev?.portfolio_id !== portfolio.id) throw new HttpError(409, 'Vous avez déjà utilisé ce code promo pour un autre portfolio.')
+        if (prev?.portfolio_id !== portfolio.id) throw new HttpError(409, 'Votre compte a déjà reçu un portfolio offert avec un code promo.')
       } else if (error) {
         throw new Error(`Paiement non enregistré : ${error.message}`)
       }

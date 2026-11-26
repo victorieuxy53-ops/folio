@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { emptyProject, emptyTestimonial, type Content } from '../../../shared/portfolio'
+import { emptyProject, type Content } from '../../../shared/portfolio'
 import Field from '../Field.vue'
 import ImageUpload from '../ImageUpload.vue'
 import ListEditor from '../ListEditor.vue'
+import ScreenshotsUpload from '../ScreenshotsUpload.vue'
 
 const props = defineProps<{ content: Content }>()
 // Catégories déjà utilisées, proposées pour écrire toujours la même (les filtres en dépendent).
@@ -39,20 +40,12 @@ const categories = computed(() => [...new Set(props.content.projects.map((p) => 
 
     <section class="space-y-3">
       <div>
-        <h3 class="font-semibold">Témoignages <span class="font-normal text-zinc-500">(facultatif)</span></h3>
-        <p class="text-sm text-zinc-600">Les mots d’un client, d’un responsable ou d’un collègue rassurent vos visiteurs.</p>
+        <h3 class="font-semibold">Avis clients <span class="font-normal text-zinc-500">(facultatif)</span></h3>
+        <p class="text-sm text-zinc-600">
+          Ajoutez des captures d’écran des messages de vos clients (WhatsApp, e-mail, Facebook…). Pensez à masquer leurs numéros de téléphone.
+        </p>
       </div>
-      <ListEditor :items="content.testimonials" :create="emptyTestimonial" add-label="Ajouter un témoignage" :title="(t, i) => t.name || `Témoignage ${i + 1}`">
-        <template #default="{ item }">
-          <div class="grid gap-3 sm:grid-cols-2">
-            <Field label="Témoignage" class="sm:col-span-2">
-              <textarea v-model="item.quote" rows="3" class="input resize-y" placeholder="Ex. : Un travail remarquable, livré dans les délais." />
-            </Field>
-            <Field label="Nom"><input v-model="item.name" class="input" placeholder="Ex. : Koffi Mensah" /></Field>
-            <Field label="Fonction"><input v-model="item.role" class="input" placeholder="Ex. : Directeur, Kora Pay" /></Field>
-          </div>
-        </template>
-      </ListEditor>
+      <ScreenshotsUpload v-model="content.reviews" />
     </section>
   </div>
 </template>

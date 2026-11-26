@@ -73,7 +73,8 @@ export interface Experience { role: string; org: string; period: string; text: s
 export interface Project { title: string; category: string; text: string; image: string; url: string }
 export interface Stat { value: string; label: string }
 export interface Service { title: string; text: string }
-export interface Testimonial { quote: string; name: string; role: string }
+/** Nombre maximal de captures d'écran d'avis clients. */
+export const MAX_REVIEWS = 12
 
 export interface Content {
   name: string
@@ -94,7 +95,8 @@ export interface Content {
   experiences: Experience[]
   education: Experience[]
   projects: Project[]
-  testimonials: Testimonial[]
+  /** Avis clients : adresses de captures d'écran (messages WhatsApp, e-mails…). */
+  reviews: string[]
 }
 
 export interface Theme { bg: string; text: string; accent: string; font: FontId }
@@ -128,7 +130,6 @@ export const emptyExperience = (): Experience => ({ role: '', org: '', period: '
 export const emptyProject = (): Project => ({ title: '', category: '', text: '', image: '', url: '' })
 export const emptyStat = (): Stat => ({ value: '', label: '' })
 export const emptyService = (): Service => ({ title: '', text: '' })
-export const emptyTestimonial = (): Testimonial => ({ quote: '', name: '', role: '' })
 
 /** Combinaison de style aléatoire : deux portfolios ne démarrent pas identiques. */
 export function randomStyle(): { template: TemplateId; theme: Theme } {
@@ -178,7 +179,7 @@ export function normalize(raw: { slug?: unknown; template?: unknown; theme?: unk
       experiences: list(c.experiences, experience),
       education: list(c.education, experience),
       projects: list(c.projects, (e) => ({ title: str(e.title), category: str(e.category), text: str(e.text), image: str(e.image), url: str(e.url) })),
-      testimonials: list(c.testimonials, (e) => ({ quote: str(e.quote), name: str(e.name), role: str(e.role) })),
+      reviews: strings(c.reviews).slice(0, MAX_REVIEWS),
     },
   }
 }
@@ -224,8 +225,5 @@ export const SAMPLE: Content = {
     { title: 'Santé Direct', category: 'Site web', text: 'Prise de rendez-vous en ligne pour 15 cliniques de Cotonou.', image: '', url: '' },
     { title: 'Maison Akwaba', category: 'Identité visuelle', text: 'Logo, charte graphique et packaging d’une marque de cosmétiques.', image: '', url: '' },
   ],
-  testimonials: [
-    { quote: 'Aïcha a compris nos clients mieux que nous. La nouvelle application a doublé nos inscriptions en trois mois.', name: 'Koffi Mensah', role: 'CEO, Kora Pay' },
-    { quote: 'Rigoureuse, créative et toujours dans les délais. Je la recommande sans hésiter.', name: 'Fatou Ndiaye', role: 'Directrice produit, Marché Vert' },
-  ],
+  reviews: [],
 }

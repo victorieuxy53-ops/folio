@@ -1,37 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ImagePlus, LoaderCircle } from '@lucide/vue'
-import { supabase } from '../lib/supabase'
-import { session } from '../lib/auth'
+import { uploadImage } from '../lib/upload'
 
 const model = defineModel<string>({ required: true })
 defineProps<{ round?: boolean }>()
 const busy = ref(false)
 const error = ref('')
 
-/** Redimensionne (1600 px max) et convertit en WebP : rapide à envoyer, rapide à afficher. */
-async function shrink(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file)
-  const ratio = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height))
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.round(bitmap.width * ratio)
-  canvas.height = Math.round(bitmap.height * ratio)
-  canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('conversion'))), 'image/webp', 0.85))
-}
-
 async function onFile(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file || !session.value) return
+  if (!file) return
   busy.value = true
   error.value = ''
   try {
-    const path = `${session.value.user.id}/${crypto.randomUUID()}.webp`
-    const { error: uploadError } = await supabase.storage.from('media').upload(path, await shrink(file), { contentType: 'image/webp' })
-    if (uploadError) throw uploadError
-    model.value = supabase.storage.from('media').getPublicUrl(path).data.publicUrl
+    model.value = await uploadImage(file)
   } catch {
     error.value = 'Impossible d’utiliser cette image. Essayez une photo JPG ou PNG.'
   } finally {
