@@ -75,7 +75,7 @@ const tiles = computed(() => {
   if (!s) return []
   const creators = s.creators ?? users.value.filter((u) => (u.portfolios[0]?.count ?? 0) > 0).length
   return [
-    { label: 'Revenus encaissés', value: fcfa(s.revenue), sub: `${fcfa(total('revenue'))} sur 30 jours, avant frais Kkiapay` },
+    { label: 'Revenus encaissés', value: fcfa(s.revenue), sub: `${fcfa(total('revenue'))} sur 30 jours, frais SasPay déduits` },
     { label: 'Clients payants', value: num(s.paying), sub: `${conversion.value} % des inscrits` },
     { label: 'Utilisateurs inscrits', value: num(s.users), sub: `+${num(total('signups'))} sur 30 jours` },
     { label: 'Portfolios créés', value: num(s.portfolios), sub: `par ${num(creators)} utilisateur${creators > 1 ? 's' : ''}` },
@@ -103,6 +103,7 @@ const conversion = computed(() => (stats.value?.users ? Math.round((stats.value.
 const EVENT_TYPES: Record<string, { label: string; icon: typeof UserPlus; cls: string }> = {
   signup: { label: 'Nouvelle inscription', icon: UserPlus, cls: 'bg-sky-50 text-sky-700' },
   portfolio_created: { label: 'Portfolio créé', icon: FilePlus, cls: 'bg-zinc-100 text-zinc-700' },
+  checkout: { label: 'Paiement commencé', icon: Wallet, cls: 'bg-zinc-100 text-zinc-700' },
   payment: { label: 'Paiement reçu', icon: Wallet, cls: 'bg-emerald-50 text-emerald-700' },
   promo: { label: 'Code promo utilisé', icon: TicketPercent, cls: 'bg-violet-50 text-violet-700' },
   published: { label: 'Site publié', icon: Rocket, cls: 'bg-brand-50 text-brand-700' },

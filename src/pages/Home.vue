@@ -45,7 +45,7 @@ const features = [
 const faq = [
   { q: 'Dois-je savoir coder ?', a: 'Non. Vous remplissez un formulaire simple, vous choisissez un style, et nous nous occupons de tout le reste.' },
   { q: 'Quand dois-je payer ?', a: `Uniquement au moment de publier. Vous pouvez créer et prévisualiser votre portfolio gratuitement. Le paiement de ${fcfa(PRICE)} est unique, sans abonnement.` },
-  { q: 'Quels moyens de paiement sont acceptés ?', a: 'Mobile Money et carte bancaire, via la plateforme de paiement sécurisée Kkiapay.' },
+  { q: 'Quels moyens de paiement sont acceptés ?', a: 'Mobile Money et carte bancaire, via la plateforme de paiement sécurisée SasPay.' },
   { q: 'Quelle sera l’adresse de mon site ?', a: `Vous la choisissez à la création, sous la forme ${PROJECT_PREFIX}-votre-nom.vercel.app. Elle s’affiche dès la publication, prête à partager.` },
   { q: 'Puis-je modifier mon portfolio après publication ?', a: 'Oui, autant de fois que vous le souhaitez. Un clic sur « Mettre à jour » suffit, sans frais supplémentaires.' },
   { q: 'Mon portfolio ressemblera-t-il à celui des autres ?', a: 'Non. Mise en page, couleurs et typographie se combinent librement : chaque portfolio démarre même avec un style différent.' },
@@ -168,7 +168,7 @@ const faq = [
         <div>
           <h2 class="text-3xl font-extrabold tracking-tight sm:text-4xl">Un seul prix. Pas d’abonnement. Pas de surprise.</h2>
           <p class="mt-4 text-zinc-400">Créez et prévisualisez gratuitement. Vous ne payez qu’une fois, au moment de mettre votre portfolio en ligne.</p>
-          <p class="mt-6 flex items-center gap-2 text-sm text-zinc-400"><Smartphone class="size-4" /> Paiement sécurisé par Mobile Money ou carte via Kkiapay</p>
+          <p class="mt-6 flex items-center gap-2 text-sm text-zinc-400"><Smartphone class="size-4" /> Paiement sécurisé par Mobile Money ou carte via SasPay</p>
         </div>
         <div class="rounded-3xl bg-white p-8 text-zinc-900 shadow-2xl">
           <p class="font-semibold text-brand-600">Portfolio en ligne</p>

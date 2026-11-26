@@ -1,6 +1,6 @@
 # Folio — portfolios professionnels à 2 000 FCFA
 
-Les clients créent leur portfolio sans code. Ils choisissent un style (6 mises en page animées, 8 palettes ou leurs propres couleurs, 6 typographies) et paient 2 000 FCFA (Mobile Money ou carte via Kkiapay). Leur site est alors déployé automatiquement sur Vercel. Le propriétaire suit toute l'activité depuis `/admin`.
+Les clients créent leur portfolio sans code. Ils choisissent un style (6 mises en page animées, 8 palettes ou leurs propres couleurs, 6 typographies) et paient 2 000 FCFA (Mobile Money ou carte via SasPay). Leur site est alors déployé automatiquement sur Vercel. Le propriétaire suit toute l'activité depuis `/admin`.
 
 **Pile technique** : Vue 3 + Vite + Tailwind 4 · Supabase (auth, base Postgres, stockage d'images) · une fonction Vercel (`api/publish.ts`).
 
@@ -15,8 +15,11 @@ Les clients créent leur portfolio sans code. Ils choisissent un style (6 mises 
 4. Facultatif : **Authentication > Providers > Email**, mot de passe de 8 caractères minimum.
 5. **E-mails** : sans SMTP personnalisé, Supabase n'envoie ses e-mails qu'aux membres de votre équipe Supabase. Vos clients ne reçoivent rien, même dans les spams. Désactivez **Confirm email** (inscription immédiate), et configurez un SMTP dans **Authentication > Emails > SMTP Settings** (ex. Brevo, gratuit : `smtp-relay.brevo.com`, port `587`) pour « Mot de passe oublié ».
 
-### 2. Kkiapay
-Créez un compte sur [kkiapay.me](https://kkiapay.me) et récupérez, dans **Développeurs > Clés API**, les clés publique, privée et secrète. Testez avec les clés de test et `VITE_KKIAPAY_SANDBOX=true` (numéro de test MTN Bénin qui réussit, d'après la doc Kkiapay : `22961000000`), puis mettez les clés réelles avec `VITE_KKIAPAY_SANDBOX=false` et redéployez.
+### 2. SasPay (paiement)
+Le client paie sur la page sécurisée de SasPay (Mobile Money ou carte), puis revient sur l'éditeur, qui publie son portfolio. Le serveur vérifie chaque paiement auprès de SasPay avant de publier.
+1. **Tester** : sur [app.saspay.me](https://app.saspay.me), passez en **Sandbox** (menu du compte ; compte séparé, sans KYC), créez une clé API dans **Développeur** (`sk_test_…`, scope PAYIN ou BOTH) et mettez-la dans `SASPAY_API_KEY`. En bac à sable, le dernier chiffre du numéro décide du résultat : `0` réussit (ex. `0197234560`), `1` échoue, `9` reste en attente.
+2. **Encaisser pour de vrai** : sur le compte Live (KYC validé), créez une clé `sk_live_…`, remplacez `SASPAY_API_KEY` sur Vercel et redéployez. Faites un premier paiement réel.
+3. Les frais suivent le réglage de votre compte SasPay (**Paramètres > Frais**). L'administration affiche le montant net que vous recevez.
 
 ### 3. Jeton Vercel (déploiement des portfolios)
 Dans **Vercel > Account Settings > Tokens**, créez un jeton. Si les portfolios doivent vivre dans une équipe, renseignez aussi son ID dans `DEPLOY_TEAM_ID`.
@@ -37,7 +40,7 @@ update public.profiles set role = 'admin' where email = 'votre@email.com';
 ```
 Le lien **Administration** apparaît alors dans la barre du haut (rechargez la page). Si `/admin` affiche « Accès réservé », la commande a été exécutée dans un autre projet Supabase que celui de `VITE_SUPABASE_URL` sur Vercel, ou avec un autre e-mail.
 
-L'administration montre les chiffres clés, les revenus, les visites, le parcours du visiteur au client, et tout le journal d'activité : inscriptions, portfolios créés, paiements, codes promo, mises en ligne, et chaque **échec de mise en ligne avec sa raison** (paiement refusé, erreur Kkiapay ou Vercel…).
+L'administration montre les chiffres clés, les revenus, les visites, le parcours du visiteur au client, et tout le journal d'activité : inscriptions, portfolios créés, paiements, codes promo, mises en ligne, et chaque **échec de mise en ligne avec sa raison** (paiement refusé, erreur SasPay ou Vercel…).
 
 **Vérification en 2 étapes** : à la première visite de l'administration, scannez le QR code avec **Google Authenticator** (ou une application équivalente), puis entrez le code à 6 chiffres. Ce code est ensuite demandé à chaque connexion : sans lui, la base refuse l'accès aux données de la plateforme, même avec le bon mot de passe.
 Téléphone perdu : exécutez dans Supabase, puis scannez le nouveau QR code proposé :
@@ -58,12 +61,12 @@ npm run build             # vérification des types + build de production
 | Dossier | Rôle |
 |---|---|
 | `shared/` | Modèle de données et générateur HTML des portfolios, partagés par le navigateur (aperçu en direct) et le serveur (site déployé) |
-| `api/publish.ts` | Vérifie l'utilisateur et le paiement Kkiapay (ou le code promo), déploie sur Vercel, enregistre l'URL |
+| `api/publish.ts` | Vérifie l'utilisateur et le paiement SasPay (ou le code promo), déploie sur Vercel, enregistre l'URL |
 | `src/pages/` | Accueil, connexion, mes portfolios, éditeur, administration |
 | `supabase/schema.sql` | Tables, sécurité (RLS), déclencheurs d'activité, statistiques admin, stockage |
 
 ## Sécurité
 - Les clients ne peuvent modifier que le contenu et le style. Le statut de paiement, l'URL et le rôle ne sont écrits que par le serveur.
-- Chaque transaction Kkiapay est vérifiée côté serveur, liée au portfolio pour lequel elle a été payée, et ne peut servir qu'une seule fois.
+- La clé SasPay reste sur le serveur. Chaque paiement est vérifié auprès de SasPay (statut `SUCCESS` seulement), lié au portfolio pour lequel il a été ouvert, et ne sert qu'une seule fois. Un paiement en cours est toujours réutilisé : un client ne paie jamais deux fois.
 - Les republications sont espacées d'au moins 30 secondes pour protéger le quota de déploiements Vercel.
 - Tout le texte saisi est échappé et les liens dangereux (`javascript:`, etc.) sont filtrés dans les sites générés.

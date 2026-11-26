@@ -33,7 +33,7 @@ alter table public.profiles add constraint profiles_full_name_length check (char
 alter table public.portfolios drop constraint if exists portfolios_theme_size;
 alter table public.portfolios add constraint portfolios_theme_size check (octet_length(theme::text) < 2000);
 
--- Un paiement Kkiapay, ou un portfolio offert par le code promo
+-- Un paiement SasPay (transaction_id SasPay, amount = net reçu), ou un portfolio offert par le code promo
 -- (transaction_id = 'promo:<id du compte>', amount = 0 : un seul par compte).
 create table if not exists public.payments (
   id uuid primary key default gen_random_uuid(),
@@ -44,7 +44,8 @@ create table if not exists public.payments (
   created_at timestamptz not null default now()
 );
 
--- Journal d'activité du tableau de bord administrateur.
+-- Journal d'activité du tableau de bord administrateur. Les événements « checkout » (session de paiement
+-- SasPay ouverte) servent aussi au serveur à retrouver un paiement déjà fait.
 create table if not exists public.events (
   id bigint generated always as identity primary key,
   user_id uuid references public.profiles on delete cascade,

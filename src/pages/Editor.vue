@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft, ArrowRight, Briefcase, CircleCheck, Copy, ExternalLink, Eye, FolderKanban, LoaderCircle,
   Monitor, Palette, Pencil, Rocket, Smartphone, Sparkles, TicketPercent, User, Wallet, X,
@@ -8,8 +8,6 @@ import {
 import { normalize, PRICE, promoPeriod, type PortfolioData, type PortfolioRow } from '../../shared/portfolio'
 import { renderPortfolio } from '../../shared/render'
 import { supabase } from '../lib/supabase'
-import { session } from '../lib/auth'
-import { pay } from '../lib/kkiapay'
 import { fcfa, host } from '../lib/format'
 import SitePreview from '../components/SitePreview.vue'
 import Modal from '../components/Modal.vue'
@@ -21,6 +19,7 @@ import ProjectsForm from '../components/editor/ProjectsForm.vue'
 import StyleForm from '../components/editor/StyleForm.vue'
 
 const props = defineProps<{ id: string }>()
+const route = useRoute()
 const router = useRouter()
 
 const tabs = [
@@ -39,7 +38,14 @@ const row = ref<PortfolioRow | null>(null)
 const data = ref<PortfolioData | null>(null)
 const html = ref('')
 const saveState = ref<'saved' | 'saving' | 'error'>('saved')
-const publishing = ref(false)
+// Étape affichée pendant la publication ; '' = rien en cours.
+const stages = {
+  publish: ['Mise en ligne de votre portfolio…', 'Environ 20 secondes. Merci de ne pas fermer cette page.'],
+  wait: ['Un instant…', 'Merci de ne pas fermer cette page.'],
+  pay: ['Ouverture du paiement sécurisé…', 'Mobile Money ou carte bancaire, avec SasPay.'],
+} as const
+const stage = ref<keyof typeof stages | ''>('')
+const publishing = computed(() => !!stage.value)
 const error = ref('')
 const publishedUrl = ref('')
 const copied = ref(false)
@@ -56,6 +62,11 @@ async function load() {
   row.value = r as PortfolioRow
   data.value = normalize(row.value)
   html.value = render()
+  // Retour de la page de paiement SasPay : la publication reprend d'elle-même.
+  if (route.query.paiement !== undefined) {
+    router.replace({ query: {} })
+    if (!row.value.url) deploy({}, true)
+  }
 }
 load()
 
@@ -86,9 +97,13 @@ async function save() {
 const warnUnsaved = (e: BeforeUnloadEvent) => {
   if (saveState.value !== 'saved') e.preventDefault()
 }
+// Retour arrière depuis la page de paiement : la page restaurée par le navigateur ne reste pas bloquée.
+const resume = (e: PageTransitionEvent) => e.persisted && (stage.value = '')
 addEventListener('beforeunload', warnUnsaved)
+addEventListener('pageshow', resume)
 onBeforeUnmount(() => {
   removeEventListener('beforeunload', warnUnsaved)
+  removeEventListener('pageshow', resume)
   clearTimeout(previewTimer)
   save()
 })
@@ -110,37 +125,14 @@ async function publish() {
     error.value = 'Vos dernières modifications ne sont pas enregistrées. Vérifiez votre connexion, puis réessayez.'
     return
   }
-  if (row.value.paid) return deploy()
-  const transactionId = pendingTx()
-  if (transactionId) return deploy({ transactionId })
-  if (offer.open()) checkout.value = true
-  else await payNow()
+  // Le serveur publie si le portfolio est déjà payé, sinon il renvoie vers la page de paiement SasPay.
+  if (row.value.paid || !offer.open()) return deploy()
+  checkout.value = true
 }
 
-// Paiement réussi mais publication interrompue (réseau, erreur serveur) : la transaction est gardée
-// sur cet appareil pour que « Publier » réessaie sans faire payer une deuxième fois.
-const txKey = `folio:tx:${props.id}`
-function pendingTx(value?: string) {
-  try {
-    if (value === undefined) return localStorage.getItem(txKey) ?? ''
-    if (value) localStorage.setItem(txKey, value)
-    else localStorage.removeItem(txKey)
-  } catch {}
-  return ''
-}
-
-async function payNow() {
-  if (!data.value) return
+function payNow() {
   checkout.value = false
-  try {
-    const options = { amount: PRICE, name: data.value.content.name, email: session.value?.user.email ?? '', portfolioId: props.id }
-    await pay(options, (transactionId) => {
-      pendingTx(transactionId)
-      deploy({ transactionId })
-    })
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  }
+  deploy()
 }
 
 function usePromo() {
@@ -148,10 +140,12 @@ function usePromo() {
   deploy({ promo: promo.value })
 }
 
-async function deploy(proof: { transactionId?: string; promo?: string } = {}) {
-  if (publishing.value) return
-  publishing.value = true
+/** `returning` : retour de la page de paiement, où le client vient de payer. */
+async function deploy(proof: { promo?: string } = {}, returning = false) {
+  if (stage.value) return
+  stage.value = row.value?.paid || proof.promo || returning ? 'publish' : 'wait'
   error.value = ''
+  let leaving = false
   try {
     const token = (await supabase.auth.getSession()).data.session?.access_token
     const res = await fetch('/api/publish', {
@@ -159,18 +153,22 @@ async function deploy(proof: { transactionId?: string; promo?: string } = {}) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ portfolioId: props.id, ...proof }),
     })
-    const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string }
-    // Transaction acceptée (paiement enregistré) ou refusée pour de bon : inutile de la garder.
-    if (proof.transactionId && (res.ok || [400, 402, 409].includes(res.status))) pendingTx('')
+    const body = (await res.json().catch(() => ({}))) as { url?: string; checkoutUrl?: string; error?: string }
+    if (body.checkoutUrl) {
+      if (returning) throw new Error('Votre paiement n’est pas encore confirmé par l’opérateur. Réessayez dans un instant.')
+      leaving = true
+      stage.value = 'pay'
+      return location.assign(body.checkoutUrl)
+    }
     if (!res.ok || !body.url) throw new Error(body.error || 'La mise en ligne a échoué. Réessayez dans un instant.')
     publishedUrl.value = body.url
   } catch (e) {
     // TypeError : le réseau a coupé avant la réponse du serveur.
     const message = e instanceof TypeError ? 'Connexion interrompue. Vérifiez votre réseau, puis réessayez.' : e instanceof Error ? e.message : String(e)
-    const kept = proof.transactionId && pendingTx() ? ' Votre paiement est bien conservé : cliquez de nouveau sur « Publier », vous ne paierez pas deux fois.' : ''
-    error.value = message + kept
+    // Le serveur garde la session de paiement : un nouvel essai retrouve le paiement déjà fait.
+    error.value = message + (returning ? ' Vous ne paierez pas deux fois.' : '')
   } finally {
-    publishing.value = false
+    if (!leaving) stage.value = ''
     const { data: r } = await supabase.from('portfolios').select('*').eq('id', props.id).maybeSingle()
     if (r) row.value = r as PortfolioRow
   }
@@ -279,11 +277,11 @@ const showSuccess = computed({ get: () => !!publishedUrl.value, set: (v) => !v &
     </div>
 
     <!-- Publication en cours -->
-    <div v-if="publishing" class="fixed inset-0 z-50 grid place-items-center bg-zinc-950/60 p-4 backdrop-blur-sm">
+    <div v-if="stage" class="fixed inset-0 z-50 grid place-items-center bg-zinc-950/60 p-4 backdrop-blur-sm">
       <div class="card max-w-sm p-8 text-center shadow-2xl">
         <LoaderCircle class="mx-auto size-10 animate-spin text-brand-600" />
-        <p class="mt-4 text-lg font-bold">Mise en ligne de votre portfolio…</p>
-        <p class="mt-1 text-sm text-zinc-500">Environ 20 secondes. Merci de ne pas fermer cette page.</p>
+        <p class="mt-4 text-lg font-bold">{{ stages[stage][0] }}</p>
+        <p class="mt-1 text-sm text-zinc-500">{{ stages[stage][1] }}</p>
       </div>
     </div>
 
